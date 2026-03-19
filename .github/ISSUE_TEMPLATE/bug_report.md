@@ -1,0 +1,32 @@
+---
+name: Bug report
+about: Report a defect in wow-windmedia
+title: "[bug] "
+labels: bug
+assignees: ""
+---
+
+## Summary
+
+<!-- Describe the bug clearly and briefly. -->
+
+## Environment
+
+- crate version:
+- Rust version:
+- OS:
+
+## Input
+
+- media type:
+- source format:
+
+## Reproduction
+
+<!-- Minimal steps or code sample. -->
+
+## Expected Behavior
+
+## Actual Behavior
+
+## Additional Context

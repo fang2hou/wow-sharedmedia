@@ -1,0 +1,51 @@
+minimum_prek_version = "0.3.6"
+default_install_hook_types = ["pre-commit", "commit-msg", "pre-push"]
+default_stages = ["pre-commit", "commit-msg", "pre-push"]
+fail_fast = false
+
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-yaml" },
+  { id = "check-toml" },
+]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "cargo-fmt-check"
+name = "cargo fmt --all --check"
+language = "system"
+entry = "cargo fmt --all --check"
+files = { glob = ["**/*.rs"] }
+pass_filenames = false
+stages = ["pre-commit"]
+
+[[repos.hooks]]
+id = "stylua-check"
+name = "stylua --check"
+language = "system"
+entry = "stylua --check"
+files = { glob = ["templates/*.lua"] }
+pass_filenames = true
+stages = ["pre-commit"]
+
+[[repos.hooks]]
+id = "conventional-commit-msg"
+name = "cocogitto verify commit message"
+language = "system"
+entry = "cog verify --file"
+pass_filenames = true
+stages = ["commit-msg"]
+
+[[repos.hooks]]
+id = "wow-windmedia-lib-tests"
+name = "cargo test --lib"
+language = "system"
+entry = "cargo test --lib"
+pass_filenames = false
+always_run = true
+stages = ["pre-push"]

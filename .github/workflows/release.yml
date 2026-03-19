@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (for example: 0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify release state
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Install StyLua
+        run: cargo install --locked stylua
+      - name: Check Lua template formatting
+        run: stylua --check templates/*.lua
+      - name: Clippy
+        run: cargo clippy -p wow-windmedia --all-targets -- -D warnings
+      - name: Test
+        run: cargo test -p wow-windmedia --lib
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc -p wow-windmedia --no-deps
+      - name: Package dry run
+        run: cargo publish -p wow-windmedia --dry-run
+
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: verify
+    environment: release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify requested version
+        shell: bash
+        run: |
+          actual=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="wow-windmedia") | .version')
+          test "$actual" = "${{ github.event.inputs.version }}"
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p wow-windmedia
