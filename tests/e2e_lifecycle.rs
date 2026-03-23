@@ -253,3 +253,57 @@ fn e2e_idempotent_ensure_addon_dir() {
 	assert_eq!(data1.entries.len(), 0);
 	assert_eq!(data2.entries.len(), 1);
 }
+
+#[test]
+fn e2e_plain_folder_name() {
+	let tmp = TempDir::new().unwrap();
+	let addon_dir = tmp.path().join("WindMedia");
+
+	// Phase 1: Initialize — TOC file name and title derive from folder name
+	let data = ensure_addon_dir(&addon_dir).unwrap();
+	assert_eq!(data.entries.len(), 0);
+	assert!(addon_dir.join("data.lua").exists());
+	assert!(addon_dir.join("loader.lua").exists());
+	assert!(addon_dir.join("WindMedia.toc").exists());
+	assert!(!addon_dir.join("!!!WindMedia.toc").exists());
+	for subdir in ["statusbar", "background", "border", "font", "sound"] {
+		assert!(addon_dir.join(format!("media/{subdir}")).is_dir());
+	}
+
+	// Verify TOC content — no `!` stripping needed for plain names
+	let toc = std::fs::read_to_string(addon_dir.join("WindMedia.toc")).unwrap();
+	assert!(toc.contains("## Title: WindMedia"));
+	assert!(!toc.contains("## Title: !"));
+
+	// Phase 2: Import statusbar
+	let tga = fixture_statusbar(tmp.path());
+	let sb = import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "Plain Bar", &tga)).unwrap();
+	assert_eq!(sb.entry.key, "Plain Bar");
+	assert!(addon_dir.join(&sb.entry.file).exists());
+
+	// Phase 3: Read back
+	let data = read_data(&addon_dir).unwrap();
+	assert_eq!(data.entries.len(), 1);
+	assert_eq!(data.entries[0].key, "Plain Bar");
+
+	// Phase 4: Update
+	let updated = update_media(
+		&addon_dir,
+		&sb.entry.id,
+		UpdateOptions {
+			key: Some("Renamed Bar".into()),
+			locales: None,
+			tags: Some(vec!["plain".into()]),
+		},
+	)
+	.unwrap();
+	assert_eq!(updated.key, "Renamed Bar");
+
+	// Phase 5: Remove
+	let _ = remove_media(&addon_dir, &sb.entry.id).unwrap();
+	assert!(!addon_dir.join(&sb.entry.file).exists());
+
+	// Phase 6: Verify final state
+	let data = read_data(&addon_dir).unwrap();
+	assert!(data.entries.is_empty());
+}

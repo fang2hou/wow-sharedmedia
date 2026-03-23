@@ -20,11 +20,12 @@ pub(crate) fn read_data(addon_dir: &Path) -> Result<AddonData, Error> {
 
 	let lua = Lua::new();
 	let addon: Table = lua.create_table()?;
+	let addon_name = crate::addon_name(addon_dir);
 
 	// Wrap the script as a function to pass args via ...
 	let wrapped = format!("return function(...)\n{}\nend", content);
 	let func: mlua::Function = lua.load(&wrapped).eval()?;
-	func.call::<()>(("WindMedia".to_string(), addon.clone()))?;
+	func.call::<()>((addon_name.to_string(), addon.clone()))?;
 
 	// Extract addon.data
 	let data_val: Value = addon.get("data")?;

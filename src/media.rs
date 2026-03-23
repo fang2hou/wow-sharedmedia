@@ -559,13 +559,13 @@ mod tests {
 	#[test]
 	fn test_ensure_creates_fresh_addon() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 
 		let data = ensure_addon_dir(&addon_dir).unwrap();
 
 		assert!(addon_dir.join("data.lua").exists());
 		assert!(addon_dir.join("loader.lua").exists());
-		assert!(addon_dir.join("!!!WindMedia.toc").exists());
+		assert!(addon_dir.join("TestAddon.toc").exists());
 		assert!(addon_dir.join("media").join("statusbar").is_dir());
 		assert!(addon_dir.join("media").join("background").is_dir());
 		assert!(addon_dir.join("media").join("border").is_dir());
@@ -578,7 +578,7 @@ mod tests {
 	#[test]
 	fn test_ensure_is_idempotent() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 
 		let data1 = ensure_addon_dir(&addon_dir).unwrap();
 		let data2 = ensure_addon_dir(&addon_dir).unwrap();
@@ -594,7 +594,7 @@ mod tests {
 	#[test]
 	fn test_ensure_preserves_existing_data() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 
 		// Create addon with initial data
 		let data1 = ensure_addon_dir(&addon_dir).unwrap();
@@ -625,7 +625,7 @@ mod tests {
 	#[test]
 	fn test_import_image_creates_entry_and_file() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		// Create a valid PNG source
@@ -654,7 +654,7 @@ mod tests {
 	#[test]
 	fn test_import_rejects_duplicate_key() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("test.png");
@@ -679,7 +679,7 @@ mod tests {
 	#[test]
 	fn test_import_rejects_invalid_extension() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("test.xyz");
@@ -699,7 +699,7 @@ mod tests {
 	#[test]
 	fn test_import_missing_source_file() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("nonexistent.png");
@@ -711,7 +711,7 @@ mod tests {
 	#[test]
 	fn test_import_auto_bootstraps_missing_addon_dir() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 
 		let source = dir.path().join("bootstrap.png");
 		create_test_png(&source);
@@ -725,14 +725,14 @@ mod tests {
 		assert_eq!(result.entry.key, "Bootstrap");
 		assert!(addon_dir.join("data.lua").exists());
 		assert!(addon_dir.join("loader.lua").exists());
-		assert!(addon_dir.join("!!!WindMedia.toc").exists());
+		assert!(addon_dir.join("TestAddon.toc").exists());
 		assert!(addon_dir.join(&result.entry.file).exists());
 	}
 
 	#[test]
 	fn test_import_overwrite_allows_duplicate() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("test.png");
@@ -752,7 +752,7 @@ mod tests {
 	#[test]
 	fn test_import_avoids_file_name_collisions() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source_a = dir.path().join("same-name.png");
@@ -776,7 +776,7 @@ mod tests {
 	#[test]
 	fn test_remove_deletes_entry_and_file() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("test.png");
@@ -800,7 +800,7 @@ mod tests {
 	#[test]
 	fn test_remove_nonexistent_id() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let fake_id = uuid::Uuid::new_v4();
@@ -815,7 +815,7 @@ mod tests {
 	#[test]
 	fn test_remove_auto_bootstraps_missing_addon_dir() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		let fake_id = uuid::Uuid::new_v4();
 
 		let result = remove_media(&addon_dir, &fake_id);
@@ -827,13 +827,13 @@ mod tests {
 
 		assert!(addon_dir.join("data.lua").exists());
 		assert!(addon_dir.join("loader.lua").exists());
-		assert!(addon_dir.join("!!!WindMedia.toc").exists());
+		assert!(addon_dir.join("TestAddon.toc").exists());
 	}
 
 	#[test]
 	fn test_remove_succeeds_when_file_already_deleted() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("test.png");
@@ -858,7 +858,7 @@ mod tests {
 	#[test]
 	fn test_update_key() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("test.png");
@@ -888,7 +888,7 @@ mod tests {
 	#[test]
 	fn test_update_tags() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("test.png");
@@ -915,7 +915,7 @@ mod tests {
 	#[test]
 	fn test_update_font_locales_validates_names() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("font.ttf");
@@ -944,7 +944,7 @@ mod tests {
 	#[test]
 	fn test_update_non_font_locales_rejected() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("test.png");
@@ -970,7 +970,7 @@ mod tests {
 	#[test]
 	fn test_update_rejects_duplicate_key() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let source = dir.path().join("test.png");
@@ -1006,7 +1006,7 @@ mod tests {
 	#[test]
 	fn test_update_nonexistent_id() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		ensure_addon_dir(&addon_dir).unwrap();
 
 		let fake_id = uuid::Uuid::new_v4();
@@ -1025,7 +1025,7 @@ mod tests {
 	#[test]
 	fn test_update_auto_bootstraps_missing_addon_dir() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 		let fake_id = uuid::Uuid::new_v4();
 
 		let result = update_media(
@@ -1045,7 +1045,7 @@ mod tests {
 
 		assert!(addon_dir.join("data.lua").exists());
 		assert!(addon_dir.join("loader.lua").exists());
-		assert!(addon_dir.join("!!!WindMedia.toc").exists());
+		assert!(addon_dir.join("TestAddon.toc").exists());
 	}
 
 	#[test]
@@ -1058,7 +1058,7 @@ mod tests {
 	#[test]
 	fn test_full_lifecycle() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 
 		// 1. Init
 		let data = ensure_addon_dir(&addon_dir).unwrap();
@@ -1109,7 +1109,7 @@ mod tests {
 	#[test]
 	fn test_data_lua_end_to_end_state_transition_snapshot() {
 		let dir = TempDir::new().unwrap();
-		let addon_dir = dir.path().join("!!!WindMedia");
+		let addon_dir = dir.path().join("TestAddon");
 
 		ensure_addon_dir(&addon_dir).unwrap();
 		let initial_snapshot = read_data_lua_snapshot(&addon_dir);
