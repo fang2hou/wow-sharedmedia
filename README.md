@@ -6,7 +6,7 @@
 
 `wow-windmedia` is a Rust library for building and maintaining World of Warcraft SharedMedia addons.
 
-It manages `data.lua`, generates `loader.lua` and `!!!WindMedia.toc`, converts supported media formats into WoW-compatible outputs, and keeps the addon directory in a consistent state through a small stateless API.
+It manages `data.lua`, generates `loader.lua` and `.toc`, converts supported media formats into WoW-compatible outputs, and keeps the addon directory in a consistent state through a small stateless API.
 
 ## 📦 Installation
 
@@ -27,7 +27,10 @@ use wow_windmedia::{
 };
 
 fn main() -> Result<(), wow_windmedia::Error> {
-    let addon_dir = Path::new("AddOns/!!!WindMedia");
+    // The addon name is derived from the folder path.
+    // "!!!WindMedia" sorts to top in the addon list;
+    // "WindMedia" works too.
+    let addon_dir = Path::new("AddOns/WindMedia");
     ensure_addon_dir(addon_dir)?;
 
     let source = Path::new("assets/my-statusbar.png");
@@ -68,11 +71,23 @@ Every write operation follows the same model:
 
 This keeps the runtime model small, deterministic, and easy to integrate into higher-level tools.
 
+### Addon Name Resolution
+
+The addon name is derived from the folder path — no hardcoding required.
+
+| Folder name        | TOC file              | TOC Title   |
+| ----------------- | --------------------- | ----------- |
+| `WindMedia`       | `WindMedia.toc`       | `WindMedia` |
+| `!!!WindMedia`     | `!!!WindMedia.toc`     | `WindMedia` |
+| `!!MyAddon`        | `!!MyAddon.toc`        | `MyAddon`    |
+
+Leading `!` characters are stripped from the title automatically.
+
 ## 🗂️ Addon Layout
 
 ```text
-!!!WindMedia/
-├── !!!WindMedia.toc
+WindMedia/                      # or !!!WindMedia — both work
+├── WindMedia.toc               # or !!!WindMedia.toc
 ├── data.lua
 ├── loader.lua
 ├── libraries/
@@ -101,69 +116,11 @@ bun run update-vendor
 
 This runs `svn export` for libsharedmedia-3.0 and fetches serpent from GitHub. The `vendor/` directory must exist before building (Rust embeds files via `include_str!`).
 
-## 🛠️ Development
+## 📚 More
 
-### Prerequisites
-
-| Tool      | Purpose                          |
-| --------- | -------------------------------- |
-| Rust 1.94 | Build and test                   |
-| Bun       | Vendor script and JS toolchain   |
-| SVN       | Vendor download (libsharedmedia) |
-
-#### Install SVN
-
-**Windows** — included with TortoiseSVN or install separately:
-
-```bash
-# VisualSVN provides a standalone svn CLI for Windows
-# https://www.visualsvn.com/downloads/
-```
-
-**macOS:**
-
-```bash
-brew install subversion
-```
-
-**Linux (Debian/Ubuntu):**
-
-```bash
-sudo apt-get install subversion
-```
-
-### Setup
-
-```bash
-bun install
-bun run update-vendor
-```
-
-### Checks
-
-```bash
-cargo fmt --all --check
-cargo clippy -p wow-windmedia --all-targets -- -D warnings
-cargo test -p wow-windmedia
-cargo doc -p wow-windmedia --no-deps
-bun run lint
-bun run format:check
-stylua --check templates/*.lua
-```
-
-### Pre-commit Hooks
-
-```bash
-# Requires: cocogitto, prek, stylua
-cargo install --locked cocogitto
-prek install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push
-```
-
-## 📚 Documentation
-
-- [Contributor guidance](./CONTRIBUTING.md)
-- [Publishing workflow](./PUBLISHING.md)
+- [Development setup](./CONTRIBUTING.md) — prerequisites, checks, hooks
+- [Publishing workflow](./PUBLISHING.md) — release process and crates.io
 
 ## 📄 License
 
-[MIT LICENSE](./LICENSE)
+[MIT LICENSE](./LICENSE).
