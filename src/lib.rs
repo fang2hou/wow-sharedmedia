@@ -57,10 +57,11 @@
 //! After `ensure_addon_dir`, the directory layout is:
 //!
 //! ```text
-//! AddOns/WindMedia/
-//! ├── data.lua          # Media registry (Lua table, single source of truth)
-//! ├── loader.lua        # LSM registration script (auto-generated)
-//! ├── WindMedia.toc     # WoW addon manifest (auto-generated)
+//! !!!WindMedia/
+//! ├── !!!WindMedia.toc  # WoW addon manifest (auto-generated)
+//! ├── data.lua           # Media registry (Lua table, single source of truth)
+//! ├── loader.lua         # LSM registration script (auto-generated)
+//! ├── libraries/         # Vendored LibSharedMedia-3.0 dependencies
 //! └── media/
 //!     ├── statusbar/    # TGA texture files
 //!     ├── background/   # TGA texture files
