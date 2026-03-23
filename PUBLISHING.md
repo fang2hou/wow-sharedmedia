@@ -2,97 +2,120 @@
 
 This document describes the release workflow for `wow-windmedia`.
 
-The goal is a release process that feels consistent with mature Rust libraries: explicit versioning, repeatable validation, and safe crates.io publication.
+## How It Works
 
-## 1. Repository Layout
+Releases are fully automated via cocogitto + GitHub Actions:
 
-This guide assumes `wow-windmedia` is the repository root and that `Cargo.toml`, `src/`, `.github/`, `templates/`, and the repository policy files live alongside each other.
+1. Merge PR to `main` with conventional commits
+2. Go to **Actions → Release → Run workflow**
+3. Select bump type: `auto` (recommended), `major`, `minor`, `patch`, or explicit version
+4. CI verifies everything, then automatically:
+   - Bumps `Cargo.toml` version via `cargo set-version`
+   - Creates a git tag (e.g. `0.2.0`)
+   - Generates `CHANGELOG.md` from conventional commits
+   - Publishes to [crates.io](https://crates.io/crates/wow-windmedia)
+   - Creates a GitHub Release with the changelog
 
-## 2. Pre-Release Checklist
+**No manual version editing. No manual tag pushing. No manual `cargo publish`.**
 
-Before cutting a release, make sure all of the following are true:
+## Bump Types
 
-- `Cargo.toml` version is correct
-- `README.md` reflects the current public API
-- CI is green on the target branch
-- `cargo publish --dry-run` succeeds locally
+| Input   | Behavior                                                         |
+| ------- | ---------------------------------------------------------------- |
+| `auto`  | Analyzes commits since last tag, picks semver bump automatically |
+| `patch` | `0.1.0` → `0.1.1`                                                |
+| `minor` | `0.1.0` → `0.2.0`                                                |
+| `major` | `0.1.0` → `1.0.0`                                                |
+| `1.2.3` | Set exact version                                                |
 
-## 3. Local Validation
+## Prerequisites
 
-Run the same checks maintainers expect in CI:
+The following must be configured in the repository:
 
-```bash
-cargo fmt --all --check
-cargo check --workspace
-cargo clippy -p wow-windmedia --all-targets -- -D warnings
-cargo test -p wow-windmedia --lib
-RUSTDOCFLAGS="-D warnings" cargo doc -p wow-windmedia --no-deps
-cargo publish --dry-run
+| Secret                 | Purpose                                      |
+| ---------------------- | -------------------------------------------- |
+| `CARGO_REGISTRY_TOKEN` | crates.io publish token                      |
+| `GITHUB_TOKEN`         | Auto-provided by GitHub Actions for tag push |
+
+A `release` environment must exist in **Settings → Environments** with the `CARGO_REGISTRY_TOKEN` secret.
+
+## Release Flow Detail
+
+```
+┌─────────────────┐     ┌──────────┐     ┌──────────┐     ┌──────────────────┐
+│ Run workflow    │────▶│ Verify   │────▶│ Bump     │────▶│ Publish + Release │
+│ (workflow_dispatch)│     │ (fmt, clippy,   │     │ (cog bump,     │     │ (cargo publish,   │
+│                  │     │  test, docs,    │     │  tag, changelog│     │  GitHub Release)  │
+│                  │     │  package dry)   │     │                 │     │                   │
+└─────────────────┘     └──────────┘     └──────────┘     └──────────────────┘
 ```
 
-For commit-policy validation from the repository root:
+### Verify Job
 
-```bash
-prek run --all-files --stage pre-commit
-printf 'feat: verify commit policy\n' > .git/COMMIT_EDITMSG
-prek run conventional-commit-msg --stage commit-msg --files .git/COMMIT_EDITMSG --commit-msg-filename .git/COMMIT_EDITMSG
-```
+Runs the same checks as CI:
 
-## 4. Versioning
+- `cargo fmt --all --check`
+- `stylua --check templates/*.lua`
+- `cargo clippy -p wow-windmedia --all-targets -- -D warnings`
+- `cargo test -p wow-windmedia`
+- `cargo doc -p wow-windmedia --no-deps`
+- `cargo publish -p wow-windmedia --dry-run --allow-dirty`
 
-Until `1.0.0`, treat releases conservatively:
+### Release Job
 
-- use patch releases for fixes and small polish
-- use minor releases for meaningful API changes
-- avoid unnecessary public API churn between releases
+1. `cog bump <type>` — analyzes commits, runs `pre_bump_hooks`:
+   - `cargo set-version {{version}}` — updates `Cargo.toml`
+   - `git add :/Cargo.toml` — stages the change
+   - Creates commit + tag
+2. `cog changelog --at <version>` — generates changelog
+3. `cargo publish -p wow-windmedia` — publishes to crates.io
+4. Creates GitHub Release with changelog body
 
-## 5. Release Flow
+### Post-bump Hooks
 
-Recommended release order:
+After the tag is created, cocogitto runs `post_bump_hooks` from `cog.toml`:
 
-1. Update version in `Cargo.toml`
-2. Commit the release changes
-3. Create and push a version tag such as `v0.1.0`
-4. Run the GitHub `Release` workflow or publish locally with `cargo publish`
-5. Verify crates.io page renders correctly
-6. Verify docs.rs builds successfully
-7. Create a short GitHub release summary for the published version
+- `git push` — push the version bump commit
+- `git push origin <version>` — push the tag
 
-## 6. GitHub Actions
+## Versioning Policy
 
-The repository includes two workflows:
+Until `1.0.0`:
 
-- `CI` — formatting, linting, cross-platform library tests, docs, MSRV, and package dry run
-- `Release` — manually triggered publication workflow guarded by a crates.io token
+- **Patch releases** (`0.x.y` → `0.x.(y+1)`) — bug fixes, small polish
+- **Minor releases** (`0.x.y` → `0.(x+1).0`) — meaningful API additions
+- Avoid breaking changes without a minor bump
 
-The release workflow expects:
-
-- a configured repository environment named `release`
-- a repository secret named `CARGO_REGISTRY_TOKEN`
-
-## 7. crates.io Publication
-
-Local publication:
-
-```bash
-cargo login
-cargo publish -p wow-windmedia
-```
-
-If publishing through GitHub Actions, use the manual `Release` workflow after verifying the requested version matches `Cargo.toml`.
-
-## 8. Post-Release Verification
+## Post-Release Verification
 
 After a release:
 
-- confirm the crate appears on crates.io
-- confirm docs.rs built the crate successfully
-- update README badges if crates.io/docs.rs badges are introduced later
-- create a short GitHub release summary for the published version
+- Confirm the crate appears on [crates.io](https://crates.io/crates/wow-windmedia)
+- Confirm [docs.rs](https://docs.rs/wow-windmedia) built successfully
+- Verify the GitHub Release renders the changelog correctly
 
-## 9. Practical Maintainer Advice
+## Troubleshooting
 
-- Keep release commits small and boring
-- Avoid mixing refactors with release prep
-- Prefer manual release approval over fully automatic publish-on-tag for early releases
-- Treat the public API as expensive to change, even before `1.0.0`
+### "No conventional commits found"
+
+Cocogitto needs commits with conventional prefixes (`feat:`, `fix:`, etc.) since the last tag. If the last release was `0.1.0` and no new conventional commits exist, `cog bump auto` will fail. Use an explicit version instead:
+
+```
+Bump type: 0.1.1
+```
+
+### Publish fails with "already uploaded"
+
+The version already exists on crates.io. You need to bump to a higher version.
+
+### Verify fails
+
+Run the checks locally before triggering the release:
+
+```bash
+bun install && bun run update-vendor
+cargo fmt --all --check
+cargo clippy -p wow-windmedia --all-targets -- -D warnings
+cargo test -p wow-windmedia
+cargo publish -p wow-windmedia --dry-run --allow-dirty
+```
