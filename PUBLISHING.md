@@ -41,12 +41,11 @@ A `release` environment must exist in **Settings → Environments** with the `CA
 
 ## Release Flow Detail
 
-```
-┌─────────────────┐     ┌───────────┐     ┌──────────┐     ┌──────────────────┐
-│  Run workflow   │────▶│  Vendor   │────▶│  Verify  │────▶│ Publish + Release│
-│ (dispatch)      │     │ (svn+bun) │     │(fmt,lint,│     │ (bump, publish,  │
-│                 │     │           │     │test,docs)│     │  gh-release)     │
-└─────────────────┘     └───────────┘     └──────────┘     └──────────────────┘
+```mermaid
+flowchart LR
+    A["🚀 Run workflow<br/><small>workflow_dispatch</small>"] --> B["📦 Vendor<br/><small>svn + bun</small>"]
+    B --> C["✅ Verify<br/><small>fmt, clippy, test, docs, package dry-run</small>"]
+    C --> D["🚀 Bump, Publish & Release<br/><small>cog bump → cargo publish → GitHub Release</small>"]
 ```
 
 ### Verify Job
