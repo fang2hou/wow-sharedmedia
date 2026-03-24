@@ -1,102 +1,102 @@
-# Publishing Guide
+# Release Process
 
-This document describes the release workflow for `wow-windmedia`.
+This document describes the automated release pipeline for `wow-windmedia`.
 
-## How It Works
+Releases are driven by [cocogitto](https://docs.cocogitto.io/) — a conventional-commit–aware versioning tool integrated into GitHub Actions. Version bumps, changelog generation, crate publication, and GitHub Release creation are all handled in a single workflow run.
 
-Releases are fully automated via cocogitto + GitHub Actions:
+## Quick Start
 
-1. Merge PR to `main` with conventional commits
-2. Go to **Actions → Release → Run workflow**
-3. Select bump type: `auto` (recommended), `major`, `minor`, `patch`, or explicit version
-4. CI verifies everything, then automatically:
-   - Bumps `Cargo.toml` version via `cargo set-version`
-   - Creates a git tag (e.g. `0.2.0`)
-   - Generates `CHANGELOG.md` from conventional commits
-   - Publishes to [crates.io](https://crates.io/crates/wow-windmedia)
-   - Creates a GitHub Release with the changelog
+1. Merge your PR to `main` using conventional commit messages
+2. Navigate to **Actions → Release → Run workflow**
+3. Select a bump type (default: `auto`) and click **Run workflow**
 
-**No manual version editing. No manual tag pushing. No manual `cargo publish`.**
+That's it. The pipeline handles the rest.
 
-## Bump Types
-
-| Input   | Behavior                                                         |
-| ------- | ---------------------------------------------------------------- |
-| `auto`  | Analyzes commits since last tag, picks semver bump automatically |
-| `patch` | `0.1.0` → `0.1.1`                                                |
-| `minor` | `0.1.0` → `0.2.0`                                                |
-| `major` | `0.1.0` → `1.0.0`                                                |
-| `1.2.3` | Set exact version                                                |
-
-## Prerequisites
-
-The following must be configured in the repository:
-
-| Secret                 | Purpose                                      |
-| ---------------------- | -------------------------------------------- |
-| `CARGO_REGISTRY_TOKEN` | crates.io publish token                      |
-| `GITHUB_TOKEN`         | Auto-provided by GitHub Actions for tag push |
-
-A `release` environment must exist in **Settings → Environments** with the `CARGO_REGISTRY_TOKEN` secret.
-
-## Release Flow Detail
+## Pipeline Overview
 
 ```mermaid
 flowchart LR
-    A["🚀 Run workflow<br/><small>workflow_dispatch</small>"] --> B["📦 Vendor<br/><small>svn + bun</small>"]
-    B --> C["✅ Verify<br/><small>fmt, clippy, test, docs, package dry-run</small>"]
-    C --> D["🚀 Bump, Publish & Release<br/><small>cog bump → cargo publish → GitHub Release</small>"]
+    A["Trigger<br/><small>workflow_dispatch</small>"] --> B["Vendor<br/><small>svn + bun</small>"]
+    B --> C["Verify<br/><small>fmt · clippy · test · docs · package</small>"]
+    C --> D["Release<br/><small>bump · publish · GitHub Release</small>"]
 ```
 
-### Verify Job
+The pipeline runs three sequential jobs:
 
-Runs the same checks as CI:
+### 1. Vendor
+
+Downloads third-party WoW libraries (LibSharedMedia-3.0, Serpent) via `svn export` and GitHub fetch. The resulting `vendor/` directory is shared across subsequent jobs as a workflow artifact.
+
+### 2. Verify
+
+Runs the full quality gate — identical to the checks in the regular CI pipeline:
 
 - `cargo fmt --all --check`
 - `stylua --check templates/*.lua`
 - `cargo clippy -p wow-windmedia --all-targets -- -D warnings`
 - `cargo test -p wow-windmedia`
-- `cargo doc -p wow-windmedia --no-deps`
+- `cargo doc -p wow-windmedia --no-deps` (with `RUSTDOCFLAGS=-D warnings`)
 - `cargo publish -p wow-windmedia --dry-run --allow-dirty`
 
-### Release Job
+If any step fails, the pipeline stops. Nothing is published.
 
-1. `cog bump <type>` — analyzes commits, runs `pre_bump_hooks`:
-   - `cargo set-version {{version}}` — updates `Cargo.toml`
-   - `git add :/Cargo.toml` — stages the change
-   - Creates commit + tag
-2. `cog changelog --at <version>` — generates changelog
-3. `cargo publish -p wow-windmedia` — publishes to crates.io
-4. Creates GitHub Release with changelog body
+### 3. Release
 
-### Post-bump Hooks
+Only runs if verification passes. Uses [cocogitto-action](https://github.com/cocogitto/cocogitto-action) to perform the following in sequence:
 
-After the tag is created, cocogitto runs `post_bump_hooks` from `cog.toml`:
+1. **Bump version** — `cog bump <type>` analyzes commits since the last tag, runs `pre_bump_hooks` (updates `Cargo.toml` via `cargo set-version`, stages the change), creates a version commit and git tag
+2. **Generate changelog** — `cog changelog --at <version>` produces a Markdown changelog from conventional commits
+3. **Publish** — `cargo publish` uploads the crate to [crates.io](https://crates.io/crates/wow-windmedia)
+4. **Push** — `post_bump_hooks` push the version commit and tag to `main`
+5. **GitHub Release** — creates a GitHub Release with the changelog body
 
-- `git push` — push the version bump commit
-- `git push origin <version>` — push the tag
+## Bump Types
 
-## Versioning Policy
+| Input       | Effect                                                                    | Example                                        |
+| ----------- | ------------------------------------------------------------------------- | ---------------------------------------------- |
+| `auto`      | Analyzes commit history and selects the correct semver bump automatically | `0.1.0` → `0.2.0` (if `feat:` commits present) |
+| `patch`     | Increment patch version                                                   | `0.1.0` → `0.1.1`                              |
+| `minor`     | Increment minor version                                                   | `0.1.0` → `0.2.0`                              |
+| `major`     | Increment major version                                                   | `0.1.0` → `1.0.0`                              |
+| `<version>` | Set an arbitrary version string                                           | `0.1.0-beta.1`                                 |
 
-Until `1.0.0`:
+Use `auto` unless you need to override cocogitto's analysis.
 
-- **Patch releases** (`0.x.y` → `0.x.(y+1)`) — bug fixes, small polish
-- **Minor releases** (`0.x.y` → `0.(x+1).0`) — meaningful API additions
-- Avoid breaking changes without a minor bump
+## Prerequisites
 
-## Post-Release Verification
+### Repository Configuration
 
-After a release:
+| Secret                 | Purpose                                                          |
+| ---------------------- | ---------------------------------------------------------------- |
+| `CARGO_REGISTRY_TOKEN` | Authentication token for [crates.io](https://crates.io/) publish |
 
-- Confirm the crate appears on [crates.io](https://crates.io/crates/wow-windmedia)
-- Confirm [docs.rs](https://docs.rs/wow-windmedia) built successfully
-- Verify the GitHub Release renders the changelog correctly
+A GitHub **environment** named `release` must exist (**Settings → Environments → release**) with `CARGO_REGISTRY_TOKEN` configured as an environment secret.
+
+`GITHUB_TOKEN` is provided automatically by GitHub Actions and used for tag pushes and Release creation — no manual configuration needed.
+
+### Commit Messages
+
+Cocogitto determines version bumps from conventional commit prefixes. The recognized types are configured in `cog.toml`:
+
+| Prefix     | Changelog section |
+| ---------- | ----------------- |
+| `feat`     | Features          |
+| `fix`      | Bug Fixes         |
+| `docs`     | Documentation     |
+| `refactor` | Refactoring       |
+| `test`     | Tests             |
+| `ci`       | CI                |
+| `build`    | Build             |
+| `perf`     | Performance       |
+| `revert`   | Reverts           |
+
+`chore` and `style` commits are excluded from the changelog.
 
 ## Troubleshooting
 
-### "No conventional commits found"
+### `cog bump auto` fails with "no conventional commits found"
 
-Cocogitto needs commits with conventional prefixes (`feat:`, `fix:`, etc.) since the last tag. If the last release was `0.1.0` and no new conventional commits exist, `cog bump auto` will fail. Use an explicit version instead:
+Cocogitto requires at least one conventional commit since the last tag. If no qualifying commits exist, specify an explicit version:
 
 ```
 Bump type: 0.1.1
@@ -104,11 +104,11 @@ Bump type: 0.1.1
 
 ### Publish fails with "already uploaded"
 
-The version already exists on crates.io. You need to bump to a higher version.
+The target version already exists on crates.io. Bump to a higher version and retry.
 
-### Verify fails
+### Verify job fails
 
-Run the checks locally before triggering the release:
+Run the checks locally to identify the issue:
 
 ```bash
 bun install && bun run update-vendor
@@ -117,3 +117,11 @@ cargo clippy -p wow-windmedia --all-targets -- -D warnings
 cargo test -p wow-windmedia
 cargo publish -p wow-windmedia --dry-run --allow-dirty
 ```
+
+## Post-Release Checklist
+
+After a successful release, verify:
+
+- [ ] The crate appears on [crates.io](https://crates.io/crates/wow-windmedia) with the correct version
+- [ ] [docs.rs](https://docs.rs/wow-windmedia) builds successfully
+- [ ] The GitHub Release renders the changelog correctly
