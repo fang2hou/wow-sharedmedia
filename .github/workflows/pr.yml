@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   conventional:
@@ -22,10 +23,21 @@ jobs:
           check: "false"
           git-user: github-actions
           git-user-email: github-actions[bot]@users.noreply.github.com
+      - name: "📥 Fetch live PR title"
+        id: pr_title
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            return data.title;
       - name: "🔍 Verify PR title"
         shell: bash
         run: |
-          title='${{ github.event.pull_request.title }}'
+          title='${{ steps.pr_title.outputs.result }}'
           pattern='^(feat|fix|docs|refactor|test|ci|chore|build|perf|style|revert)(\([a-zA-Z0-9._/-]+\))?!?: .+'
           if [[ ! "$title" =~ $pattern ]]; then
             echo "Invalid PR title: $title"
