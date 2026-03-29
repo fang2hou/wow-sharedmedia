@@ -19,11 +19,11 @@ Keep changes aligned with these goals:
 
 ## 📋 Prerequisites
 
-| Tool                   | Purpose                              |
-| ---------------------- | ------------------------------------ |
-| Rust 1.94+             | Build and test                       |
-| [Bun](https://bun.sh/) | Vendor script and JS toolchain       |
-| SVN                    | Vendor download (LibSharedMedia-3.0) |
+| Tool                   | Purpose                                              |
+| ---------------------- | ---------------------------------------------------- |
+| Rust 1.94+             | Build and test                                       |
+| [Bun](https://bun.sh/) | Vendor snapshot script and JS toolchain              |
+| SVN                    | Vendor snapshot materialization (LibSharedMedia-3.0) |
 
 ### 💻 Platform-specific setup
 
@@ -48,7 +48,15 @@ bun install
 bun run update-vendor
 ```
 
-This downloads third-party WoW libraries into `vendor/`. The directory is gitignored — Rust embeds the files at build time via `include_str!`.
+This materializes the pinned vendor snapshot declared in `vendor.lock.json` into `vendor/`. The directory is gitignored, but Rust embeds the files at build time via `include_str!`, so the snapshot must exist locally before building.
+
+To refresh upstream dependencies intentionally, run:
+
+```bash
+bun run refresh-vendor
+```
+
+Refresh mode updates `vendor.lock.json` and regenerates `vendor/`. Treat that as a maintainer workflow and review the resulting changes before merging.
 
 ## ✅ Checks
 
