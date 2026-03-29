@@ -8,6 +8,8 @@ A Rust library for building and maintaining [World of Warcraft SharedMedia](http
 
 It manages `data.lua`, generates `loader.lua` and `.toc`, converts supported media formats into WoW-compatible outputs, and keeps the addon directory in a consistent state through a small stateless API.
 
+Third-party Lua dependencies are embedded from a pinned vendor snapshot. Normal builds and releases use the tracked snapshot in `vendor.lock.json`; maintainers refresh upstream dependencies explicitly with a separate workflow.
+
 ## 📦 Installation
 
 ```toml

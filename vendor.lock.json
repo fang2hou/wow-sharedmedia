@@ -1,0 +1,33 @@
+{
+	"version": 1,
+	"vendors": {
+		"libsharedmedia-3.0": {
+			"type": "svn-export",
+			"repository": "https://repos.wowace.com/wow/libsharedmedia-3-0/trunk",
+			"revision": 166,
+			"outputDir": "vendor/libsharedmedia-3.0",
+			"files": {
+				"LibStub/LibStub.lua": "f93f7dfbd280c0f8e0328bb194faa6db541c3c50b3d4d37eb064c816f0ec5576",
+				"CallbackHandler-1.0/CallbackHandler-1.0.lua": "84a15af505e728ac5e5eb6a8eaba8989d1131d5f8ba14d11abcfe4ce086de3c1",
+				"LibSharedMedia-3.0/LibSharedMedia-3.0.lua": "39445cc0486fb0fdba7367aae9979caa342d2ab194cdbc5ed1c6fed72fdd8d6e",
+				"LibSharedMedia-3.0/lib.xml": "bd4f30d101a13ffb915114f6cd2d510fee506bca333f35387b3e08f238d85f8c"
+			}
+		},
+		"serpent": {
+			"type": "remote-file",
+			"repository": "https://github.com/pkulchenko/serpent",
+			"revision": "ed98a21db64e9e8f44403394400f84f4daecb60d",
+			"url": "https://raw.githubusercontent.com/pkulchenko/serpent/ed98a21db64e9e8f44403394400f84f4daecb60d/src/serpent.lua",
+			"outputDir": "vendor/serpent",
+			"files": {
+				"serpent.lua": "e90783bf50a5f6ace6691c0607b7c5020c2bffe174d3be63a1bee3dd198b5ccd"
+			},
+			"refresh": {
+				"type": "github-commit-path",
+				"owner": "pkulchenko",
+				"repo": "serpent",
+				"path": "src/serpent.lua"
+			}
+		}
+	}
+}

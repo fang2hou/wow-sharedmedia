@@ -25,11 +25,11 @@ The pipeline runs three sequential jobs:
 
 ### 1. 📦 Vendor
 
-Downloads third-party WoW libraries (LibSharedMedia-3.0, Serpent) via `svn export` and GitHub fetch. The resulting `vendor/` directory is shared across subsequent jobs as a workflow artifact.
+Materializes the pinned vendor snapshot declared in `vendor.lock.json`. The resulting `vendor/` directory is shared across subsequent jobs as a workflow artifact.
 
 ### 2. ✅ Verify
 
-Runs the full quality gate — identical to the checks in the regular CI pipeline:
+Runs the release quality gate. It covers the core Rust and packaging checks required before publish:
 
 - `cargo fmt --all --check`
 - `stylua --check templates/*.lua`
