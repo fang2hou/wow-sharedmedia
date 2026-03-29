@@ -88,6 +88,8 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
+      - name: "📦 Install cargo-edit"
+        run: cargo install cargo-edit --locked
       - name: "🚀 Bump version and create tag"
         id: release
         uses: cocogitto/cocogitto-action@v4
