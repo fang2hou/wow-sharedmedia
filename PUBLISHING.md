@@ -44,11 +44,12 @@ If any step fails, the pipeline stops. Nothing is published.
 
 Only runs if verification passes. Uses [cocogitto-action](https://github.com/cocogitto/cocogitto-action) to perform the following in sequence:
 
-1. **Bump version** — `cog bump <type>` analyzes commits since the last tag, runs `pre_bump_hooks` (updates `Cargo.toml` via `cargo set-version`, stages the change), creates a version commit and git tag
-2. **Generate changelog** — `cog changelog --at <version>` produces a Markdown changelog from conventional commits
-3. **Publish** — `cargo publish` uploads the crate to [crates.io](https://crates.io/crates/wow-windmedia)
-4. **Push** — `post_bump_hooks` push the version commit and tag to `main`
+1. **Create release branch** — the workflow creates a temporary `release/run-*` branch so cocogitto can push the bump commit without violating the protected `main` ruleset
+2. **Bump version** — `cog bump <type>` analyzes commits since the last tag, runs `pre_bump_hooks` (updates `Cargo.toml` via `cargo set-version`, stages the change), creates a version commit and git tag
+3. **Generate changelog** — `cog changelog --at <version>` produces a Markdown changelog from conventional commits
+4. **Publish** — `cargo publish` uploads the crate to [crates.io](https://crates.io/crates/wow-windmedia)
 5. **GitHub Release** — creates a GitHub Release with the changelog body
+6. **Open sync PR** — the workflow opens a PR from the release branch back to `main` so the released version bump is preserved in normal branch history
 
 ## 📊 Bump Types
 
@@ -72,7 +73,7 @@ Use `auto` unless you need to override cocogitto's analysis.
 
 A GitHub **environment** named `release` must exist (**Settings → Environments → release**) with `CARGO_REGISTRY_TOKEN` configured as an environment secret.
 
-`GITHUB_TOKEN` is provided automatically by GitHub Actions and used for tag pushes and Release creation — no manual configuration needed.
+`GITHUB_TOKEN` is provided automatically by GitHub Actions and used for release-branch pushes, tag pushes, PR creation, and Release creation — no manual configuration needed.
 
 ### 📝 Commit Messages
 
@@ -105,6 +106,10 @@ Bump type: 0.1.1
 ### Publish fails with "already uploaded"
 
 The target version already exists on crates.io. Bump to a higher version and retry.
+
+### Release job fails while pushing back to `main`
+
+The repository protects `main` with a PR-only ruleset. The release workflow avoids direct pushes by creating a temporary release branch, publishing from that branch, and then opening a PR back to `main` with the bump commit.
 
 ### Verify job fails
 

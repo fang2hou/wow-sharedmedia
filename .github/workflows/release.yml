@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -100,6 +101,16 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: "📦 Install cargo-edit"
         run: cargo install cargo-edit --locked
+      - name: "🌿 Create release branch"
+        id: release_branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          branch="release/run-${{ github.run_id }}-${{ github.run_attempt }}"
+          git switch -c "$branch"
+          git push -u origin "$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
       - name: "🚀 Bump version and create tag"
         id: release
         uses: cocogitto/cocogitto-action@v4
@@ -134,3 +145,18 @@ jobs:
         with:
           body_path: GITHUB_CHANGELOG.md
           tag_name: ${{ steps.release.outputs.version }}
+      - name: "🔀 Open release PR"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "${{ steps.release_branch.outputs.branch }}" \
+            --title "chore(release): cut ${{ steps.release.outputs.version }}" \
+            --body "$(cat <<EOF
+          ## Summary
+
+          - record the automated release bump commit back into main
+          - preserve the released ${{ steps.release.outputs.version }} version metadata in repository history
+          EOF
+          )"
