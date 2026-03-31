@@ -1,17 +1,25 @@
-name: "🚀 Release"
+name: "🚀 Publish Release"
 
 on:
   workflow_dispatch:
     inputs:
-      bump:
-        description: "Bump type (auto, major, minor, patch, or version)"
+      ref:
+        description: "Git ref to publish (main, commit SHA, or release tag target)"
         required: true
-        default: "auto"
+        default: "main"
         type: string
+      registry_auth:
+        description: "crates.io auth mode"
+        required: true
+        default: "trusted"
+        type: choice
+        options:
+          - trusted
+          - bootstrap-token
 
 permissions:
   contents: write
-  pull-requests: write
+  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -24,6 +32,7 @@ jobs:
       - name: "📥 Checkout"
         uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - name: "🦀 Setup Bun"
         uses: oven-sh/setup-bun@v2
@@ -48,6 +57,7 @@ jobs:
       - name: "📥 Checkout"
         uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - name: "🦀 Setup Rust toolchain"
         uses: dtolnay/rust-toolchain@v1
@@ -83,7 +93,7 @@ jobs:
         run: cargo publish -p wow-windmedia --dry-run --allow-dirty
 
   release:
-    name: "🚀 Bump, Publish & Release"
+    name: "🚀 Publish & Create GitHub Release"
     runs-on: ubuntu-latest
     needs: [verify]
     environment: release
@@ -91,72 +101,63 @@ jobs:
       - name: "📥 Checkout"
         uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
       - name: "🦀 Setup Rust toolchain"
         uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
       - name: "💾 Cache Rust artifacts"
         uses: Swatinem/rust-cache@v2
-      - name: "📦 Install cargo-edit"
-        run: cargo install cargo-edit --locked
-      - name: "🌿 Create release branch"
-        id: release_branch
+      - name: "📦 Install cocogitto"
+        run: cargo install cocogitto --locked
+
+      - name: "🏷️ Read crate version"
+        id: version
         shell: bash
         run: |
           set -euo pipefail
 
-          branch="release/run-${{ github.run_id }}-${{ github.run_attempt }}"
-          git switch -c "$branch"
-          git push -u origin "$branch"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
-      - name: "🚀 Bump version and create tag"
-        id: release
-        uses: cocogitto/cocogitto-action@v4
-        with:
-          command: bump
-          args: --${{ github.event.inputs.bump }}
+          version="$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "([^"]+)"/\1/')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: "📋 Generate changelog"
-        run: cog changelog --at ${{ steps.release.outputs.version }} -t full_hash > GITHUB_CHANGELOG.md
+        run: cog changelog --at ${{ steps.version.outputs.version }} -t full_hash > GITHUB_CHANGELOG.md
+
       - name: "📦 Download vendor snapshot"
         uses: actions/download-artifact@v8
         with:
           name: vendor
           path: vendor
-      - name: "🔍 Verify publish working tree"
-        shell: bash
-        run: |
-          set -euo pipefail
 
-          unexpected="$(git status --porcelain | grep -v '^?? GITHUB_CHANGELOG.md$' | grep -v '^?? vendor/' || true)"
+      - name: "🔐 Request trusted publishing token"
+        if: ${{ inputs.registry_auth == 'trusted' }}
+        id: crates_auth
+        uses: rust-lang/crates-io-auth-action@v1
 
-          if [ -n "$unexpected" ]; then
-            printf 'Unexpected working tree changes before publish:\n%s\n' "$unexpected"
-            exit 1
-          fi
-      - name: "📦 Publish to crates.io"
+      - name: "📦 Publish to crates.io (trusted)"
+        if: ${{ inputs.registry_auth == 'trusted' }}
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        # --allow-dirty: vendor artifacts are regenerated locally and GITHUB_CHANGELOG.md is untracked
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates_auth.outputs.token }}
         run: cargo publish -p wow-windmedia --allow-dirty
+
+      - name: "📦 Publish to crates.io (bootstrap token)"
+        if: ${{ inputs.registry_auth == 'bootstrap-token' }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_BOOTSTRAP_TOKEN }}
+        run: cargo publish -p wow-windmedia --allow-dirty
+
       - name: "🚀 Create GitHub Release"
         uses: softprops/action-gh-release@v2
         with:
           body_path: GITHUB_CHANGELOG.md
-          tag_name: ${{ steps.release.outputs.version }}
-      - name: "🔀 Open release PR"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr create \
-            --base main \
-            --head "${{ steps.release_branch.outputs.branch }}" \
-            --title "chore(release): cut ${{ steps.release.outputs.version }}" \
-            --body "$(cat <<EOF
-          ## Summary
-
-          - record the automated release bump commit back into main
-          - preserve the released ${{ steps.release.outputs.version }} version metadata in repository history
-          EOF
-          )"
+          tag_name: ${{ steps.version.outputs.version }}
+          target_commitish: ${{ inputs.ref }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}

@@ -1,0 +1,110 @@
+name: "🧭 Prepare Release"
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump type (auto, major, minor, patch, or exact version like 1.0.0-beta.1)"
+        required: true
+        default: "auto"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    name: "📝 Create release prep PR"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "🦀 Setup Rust toolchain"
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: "💾 Cache Rust artifacts"
+        uses: Swatinem/rust-cache@v2
+
+      - name: "📦 Install cargo-edit"
+        run: cargo install cargo-edit --locked
+
+      - name: "✍️ Configure git identity"
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: "🌿 Create release prep branch"
+        id: branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          branch="release/prepare-${{ github.run_id }}-${{ github.run_attempt }}"
+          git switch -c "$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: "🧮 Resolve bump arguments"
+        id: bump_args
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${{ inputs.bump }}" in
+            auto|major|minor|patch)
+              echo "value=--${{ inputs.bump }}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "value=${{ inputs.bump }}" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: "🚀 Bump version"
+        id: bump
+        uses: cocogitto/cocogitto-action@v4
+        with:
+          command: bump
+          args: ${{ steps.bump_args.outputs.value }}
+
+      - name: "📋 Regenerate changelog"
+        run: cog changelog > CHANGELOG.md
+
+      - name: "🧾 Include changelog in release commit"
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git add CHANGELOG.md
+
+          if ! git diff --cached --quiet; then
+            git commit --amend --no-edit
+          fi
+
+      - name: "📤 Push release prep branch"
+        run: git push -u origin "${{ steps.branch.outputs.branch }}"
+
+      - name: "🔀 Open release prep PR"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "${{ steps.branch.outputs.branch }}" \
+            --title "chore(release): prepare ${{ steps.bump.outputs.version }}" \
+            --body "$(cat <<EOF
+          ## Summary
+
+          - prepare version ${{ steps.bump.outputs.version }} for review and merge
+          - update Cargo.toml and CHANGELOG.md before publishing
+          - publish only after this PR merges to main and CI is green
+          EOF
+          )"
