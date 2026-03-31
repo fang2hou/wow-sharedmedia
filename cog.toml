@@ -1,4 +1,4 @@
-from_latest_tag = false
+from_latest_tag = true
 ignore_merge_commits = true
 ignore_fixup_commits = true
 
@@ -7,10 +7,8 @@ pre_bump_hooks = [
     "git add :/Cargo.toml",
 ]
 
-post_bump_hooks = [
-    "git push",
-    "git push origin {{version}}",
-]
+[changelog]
+path = "CHANGELOG.md"
 
 [commit_types]
 feat = { changelog_title = "Features" }
