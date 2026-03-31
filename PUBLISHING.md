@@ -106,10 +106,10 @@ Use `auto` unless you need to override cocogitto's analysis. For the planned bet
 
 ### Repository Configuration
 
-| Setting / secret              | Purpose                                                                 |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| `release` environment         | Protects manual publish runs and holds bootstrap-only secrets if needed |
-| `CRATES_IO_BOOTSTRAP_TOKEN`   | One-time fallback token for the first crates.io publish only            |
+| Setting / secret            | Purpose                                                                 |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `release` environment       | Protects manual publish runs and holds bootstrap-only secrets if needed |
+| `CRATES_IO_BOOTSTRAP_TOKEN` | One-time fallback token for the first crates.io publish only            |
 
 Preferred mode is **Trusted Publishing** via GitHub OIDC. The publish workflow supports:
 
