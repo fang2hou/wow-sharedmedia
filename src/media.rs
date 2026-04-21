@@ -522,7 +522,7 @@ mod tests {
 
 	fn import_statusbar(addon_dir: &std::path::Path, source: &std::path::Path, key: &str) -> ImportResult {
 		import_media(
-			&addon_dir,
+			addon_dir,
 			ImportOptions::new(MediaType::Statusbar, key, source),
 			DEFAULT_MAX_BACKUPS,
 		)
