@@ -14,6 +14,9 @@ use crate::{AddonData, EntryMetadata, Error, MediaEntry, MediaType};
 
 const MEDIA_SUBDIRS: &[&str] = &["statusbar", "background", "border", "font", "sound"];
 
+/// Default maximum number of backup files retained per write.
+pub const DEFAULT_MAX_BACKUPS: u32 = 10;
+
 /// Check if a char is a CJK character (Chinese, Japanese, Korean).
 #[inline]
 fn is_cjk_or_hangul(ch: char) -> bool {
@@ -152,7 +155,7 @@ pub struct RemovedEntry {
 /// missing, and re-deploys the static `loader.lua` and `.toc` templates.
 ///
 /// Existing `data.lua` content is preserved.
-pub fn ensure_addon_dir(addon_dir: &Path) -> Result<AddonData, Error> {
+pub fn ensure_addon_dir(addon_dir: &Path, max_backups: u32) -> Result<AddonData, Error> {
 	// Create directory structure
 	std::fs::create_dir_all(addon_dir).map_err(|e| Error::Io {
 		source: e,
@@ -166,7 +169,7 @@ pub fn ensure_addon_dir(addon_dir: &Path) -> Result<AddonData, Error> {
 	// Write data.lua if missing
 	let data = if !addon_dir.join("data.lua").exists() {
 		let data = AddonData::empty(current_version());
-		lua_io::write_data(addon_dir, &data)?;
+		lua_io::write_data(addon_dir, &data, max_backups)?;
 		data
 	} else {
 		lua_io::read_data(addon_dir)?
@@ -191,8 +194,8 @@ pub fn read_data(addon_dir: &Path) -> Result<AddonData, Error> {
 ///
 /// The addon directory and static templates are automatically created or
 /// refreshed before the import proceeds.
-pub fn import_media(addon_dir: &Path, opts: ImportOptions) -> Result<ImportResult, Error> {
-	let mut data = ensure_addon_dir(addon_dir)?;
+pub fn import_media(addon_dir: &Path, opts: ImportOptions, max_backups: u32) -> Result<ImportResult, Error> {
+	let mut data = ensure_addon_dir(addon_dir, max_backups)?;
 	let source = &opts.source;
 
 	// Validate file size
@@ -368,14 +371,14 @@ pub fn import_media(addon_dir: &Path, opts: ImportOptions) -> Result<ImportResul
 
 	data.entries.push(entry.clone());
 	refresh_generated_metadata(&mut data);
-	lua_io::write_data(addon_dir, &data)?;
+	lua_io::write_data(addon_dir, &data, max_backups)?;
 
 	Ok(ImportResult { entry, warnings })
 }
 
 /// Remove a media entry: ensure addon exists → delete file → remove entry → write data.lua.
-pub fn remove_media(addon_dir: &Path, id: &uuid::Uuid) -> Result<RemovedEntry, Error> {
-	let mut data = ensure_addon_dir(addon_dir)?;
+pub fn remove_media(addon_dir: &Path, id: &uuid::Uuid, max_backups: u32) -> Result<RemovedEntry, Error> {
+	let mut data = ensure_addon_dir(addon_dir, max_backups)?;
 
 	let idx = data
 		.entries
@@ -395,14 +398,19 @@ pub fn remove_media(addon_dir: &Path, id: &uuid::Uuid) -> Result<RemovedEntry, E
 	}
 
 	refresh_generated_metadata(&mut data);
-	lua_io::write_data(addon_dir, &data)?;
+	lua_io::write_data(addon_dir, &data, max_backups)?;
 
 	Ok(RemovedEntry { entry, deleted_file })
 }
 
 /// Update entry metadata: ensure addon exists → modify in memory → write data.lua.
-pub fn update_media(addon_dir: &Path, id: &uuid::Uuid, opts: UpdateOptions) -> Result<MediaEntry, Error> {
-	let mut data = ensure_addon_dir(addon_dir)?;
+pub fn update_media(
+	addon_dir: &Path,
+	id: &uuid::Uuid,
+	opts: UpdateOptions,
+	max_backups: u32,
+) -> Result<MediaEntry, Error> {
+	let mut data = ensure_addon_dir(addon_dir, max_backups)?;
 
 	let idx = data
 		.entries
@@ -453,7 +461,7 @@ pub fn update_media(addon_dir: &Path, id: &uuid::Uuid, opts: UpdateOptions) -> R
 	}
 
 	refresh_generated_metadata(&mut data);
-	lua_io::write_data(addon_dir, &data)?;
+	lua_io::write_data(addon_dir, &data, max_backups)?;
 
 	Ok(data.entries[idx].clone())
 }
@@ -513,7 +521,12 @@ mod tests {
 	}
 
 	fn import_statusbar(addon_dir: &std::path::Path, source: &std::path::Path, key: &str) -> ImportResult {
-		import_media(addon_dir, ImportOptions::new(MediaType::Statusbar, key, source)).unwrap()
+		import_media(
+			addon_dir,
+			ImportOptions::new(MediaType::Statusbar, key, source),
+			DEFAULT_MAX_BACKUPS,
+		)
+		.unwrap()
 	}
 
 	fn normalize_data_lua_snapshot(content: &str) -> String {
@@ -561,7 +574,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
 
-		let data = ensure_addon_dir(&addon_dir).unwrap();
+		let data = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		assert!(addon_dir.join("data.lua").exists());
 		assert!(addon_dir.join("loader.lua").exists());
@@ -580,8 +593,8 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
 
-		let data1 = ensure_addon_dir(&addon_dir).unwrap();
-		let data2 = ensure_addon_dir(&addon_dir).unwrap();
+		let data1 = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
+		let data2 = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// Second call reads existing data.lua — version and schema should match
 		assert_eq!(data1.version, data2.version);
@@ -597,7 +610,7 @@ mod tests {
 		let addon_dir = dir.path().join("TestAddon");
 
 		// Create addon with initial data
-		let data1 = ensure_addon_dir(&addon_dir).unwrap();
+		let data1 = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 		assert_eq!(data1.entries.len(), 0);
 
 		// Manually inject an entry via write_data to simulate pre-existing data
@@ -613,10 +626,10 @@ mod tests {
 			metadata: None,
 			tags: vec![],
 		});
-		crate::lua_io::write_data(&addon_dir, &modified).unwrap();
+		crate::lua_io::write_data(&addon_dir, &modified, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// ensure_addon_dir should read back the existing data
-		let data2 = ensure_addon_dir(&addon_dir).unwrap();
+		let data2 = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 		assert_eq!(data2.entries.len(), 1);
 		assert_eq!(data2.entries[0].key, "Pre-existing");
 		assert_eq!(data2.version, env!("CARGO_PKG_VERSION"));
@@ -626,14 +639,14 @@ mod tests {
 	fn test_import_image_creates_entry_and_file() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// Create a valid PNG source
 		let source = dir.path().join("test.png");
 		create_test_png(&source);
 
 		let opts = ImportOptions::new(MediaType::Statusbar, "Test Bar", &source);
-		let result = import_media(&addon_dir, opts).unwrap();
+		let result = import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS).unwrap();
 
 		assert_eq!(result.entry.key, "Test Bar");
 		assert_eq!(result.entry.media_type, MediaType::Statusbar);
@@ -655,17 +668,17 @@ mod tests {
 	fn test_import_rejects_duplicate_key() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("test.png");
 		create_test_png(&source);
 
 		let opts = ImportOptions::new(MediaType::Statusbar, "Dupe", &source);
-		import_media(&addon_dir, opts).unwrap();
+		import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// Second import with same key should fail
 		let opts2 = ImportOptions::new(MediaType::Statusbar, "Dupe", &source);
-		let result = import_media(&addon_dir, opts2);
+		let result = import_media(&addon_dir, opts2, DEFAULT_MAX_BACKUPS);
 		assert!(result.is_err());
 		match result.unwrap_err() {
 			Error::DuplicateKey { r#type, key, .. } => {
@@ -680,13 +693,13 @@ mod tests {
 	fn test_import_rejects_invalid_extension() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("test.xyz");
 		std::fs::write(&source, b"not an image").unwrap();
 
 		let opts = ImportOptions::new(MediaType::Statusbar, "Bad", &source);
-		let result = import_media(&addon_dir, opts);
+		let result = import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS);
 		assert!(result.is_err());
 		match result.unwrap_err() {
 			Error::UnsupportedFormat { extension, .. } => {
@@ -700,11 +713,11 @@ mod tests {
 	fn test_import_missing_source_file() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("nonexistent.png");
 		let opts = ImportOptions::new(MediaType::Statusbar, "Missing", &source);
-		let result = import_media(&addon_dir, opts);
+		let result = import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS);
 		assert!(result.is_err());
 	}
 
@@ -719,6 +732,7 @@ mod tests {
 		let result = import_media(
 			&addon_dir,
 			ImportOptions::new(MediaType::Statusbar, "Bootstrap", &source),
+			DEFAULT_MAX_BACKUPS,
 		)
 		.unwrap();
 
@@ -733,19 +747,19 @@ mod tests {
 	fn test_import_overwrite_allows_duplicate() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("test.png");
 		create_test_png(&source);
 
 		let mut opts = ImportOptions::new(MediaType::Statusbar, "Same", &source);
 		opts.reject_duplicates = true;
-		import_media(&addon_dir, opts).unwrap();
+		import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// With reject_duplicates = false, should succeed
 		let mut opts2 = ImportOptions::new(MediaType::Statusbar, "Same", &source);
 		opts2.reject_duplicates = false;
-		let result = import_media(&addon_dir, opts2);
+		let result = import_media(&addon_dir, opts2, DEFAULT_MAX_BACKUPS);
 		assert!(result.is_ok());
 	}
 
@@ -753,7 +767,7 @@ mod tests {
 	fn test_import_avoids_file_name_collisions() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source_a = dir.path().join("same-name.png");
 		let source_b_dir = dir.path().join("nested");
@@ -777,18 +791,18 @@ mod tests {
 	fn test_remove_deletes_entry_and_file() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("test.png");
 		create_test_png(&source);
 
 		let opts = ImportOptions::new(MediaType::Statusbar, "ToRemove", &source);
-		let entry_id = import_media(&addon_dir, opts).unwrap().entry.id;
+		let entry_id = import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS).unwrap().entry.id;
 
 		let file_path = addon_dir.join("media/statusbar/test.tga");
 		assert!(file_path.exists());
 
-		let removed = remove_media(&addon_dir, &entry_id).unwrap();
+		let removed = remove_media(&addon_dir, &entry_id, DEFAULT_MAX_BACKUPS).unwrap();
 		assert_eq!(removed.entry.key, "ToRemove");
 		assert!(!file_path.exists());
 
@@ -801,10 +815,10 @@ mod tests {
 	fn test_remove_nonexistent_id() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let fake_id = uuid::Uuid::new_v4();
-		let result = remove_media(&addon_dir, &fake_id);
+		let result = remove_media(&addon_dir, &fake_id, DEFAULT_MAX_BACKUPS);
 		assert!(result.is_err());
 		match result.unwrap_err() {
 			Error::EntryNotFound(id) => assert_eq!(id, fake_id),
@@ -818,7 +832,7 @@ mod tests {
 		let addon_dir = dir.path().join("TestAddon");
 		let fake_id = uuid::Uuid::new_v4();
 
-		let result = remove_media(&addon_dir, &fake_id);
+		let result = remove_media(&addon_dir, &fake_id, DEFAULT_MAX_BACKUPS);
 		assert!(result.is_err());
 		match result.unwrap_err() {
 			Error::EntryNotFound(id) => assert_eq!(id, fake_id),
@@ -834,13 +848,13 @@ mod tests {
 	fn test_remove_succeeds_when_file_already_deleted() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("test.png");
 		create_test_png(&source);
 
 		let opts = ImportOptions::new(MediaType::Statusbar, "Ghost", &source);
-		let entry_id = import_media(&addon_dir, opts).unwrap().entry.id;
+		let entry_id = import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS).unwrap().entry.id;
 
 		// Manually delete the file before calling remove
 		let file_path = addon_dir.join("media/statusbar/test.tga");
@@ -848,7 +862,7 @@ mod tests {
 		std::fs::remove_file(&file_path).unwrap();
 
 		// Remove should still succeed (just can't delete the already-missing file)
-		let removed = remove_media(&addon_dir, &entry_id).unwrap();
+		let removed = remove_media(&addon_dir, &entry_id, DEFAULT_MAX_BACKUPS).unwrap();
 		assert_eq!(removed.entry.key, "Ghost");
 
 		let data = read_data(&addon_dir).unwrap();
@@ -859,13 +873,13 @@ mod tests {
 	fn test_update_key() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("test.png");
 		create_test_png(&source);
 
 		let opts = ImportOptions::new(MediaType::Statusbar, "OldKey", &source);
-		let entry_id = import_media(&addon_dir, opts).unwrap().entry.id;
+		let entry_id = import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS).unwrap().entry.id;
 
 		let updated = update_media(
 			&addon_dir,
@@ -875,6 +889,7 @@ mod tests {
 				locales: None,
 				tags: None,
 			},
+			DEFAULT_MAX_BACKUPS,
 		)
 		.unwrap();
 
@@ -889,13 +904,13 @@ mod tests {
 	fn test_update_tags() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("test.png");
 		create_test_png(&source);
 
 		let opts = ImportOptions::new(MediaType::Statusbar, "TagMe", &source);
-		let entry_id = import_media(&addon_dir, opts).unwrap().entry.id;
+		let entry_id = import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS).unwrap().entry.id;
 
 		let updated = update_media(
 			&addon_dir,
@@ -905,6 +920,7 @@ mod tests {
 				locales: None,
 				tags: Some(vec!["a".into(), "b".into()]),
 			},
+			DEFAULT_MAX_BACKUPS,
 		)
 		.unwrap();
 
@@ -916,14 +932,14 @@ mod tests {
 	fn test_update_font_locales_validates_names() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("font.ttf");
 		std::fs::copy(r"C:\Windows\Fonts\arial.ttf", &source).unwrap();
 
 		let mut opts = ImportOptions::new(MediaType::Font, "Body Font", &source);
 		opts.locales = vec!["western".into()];
-		let entry_id = import_media(&addon_dir, opts).unwrap().entry.id;
+		let entry_id = import_media(&addon_dir, opts, DEFAULT_MAX_BACKUPS).unwrap().entry.id;
 
 		let result = update_media(
 			&addon_dir,
@@ -933,6 +949,7 @@ mod tests {
 				locales: Some(vec!["bad-locale".into()]),
 				tags: None,
 			},
+			DEFAULT_MAX_BACKUPS,
 		);
 		assert!(result.is_err());
 		match result.unwrap_err() {
@@ -945,7 +962,7 @@ mod tests {
 	fn test_update_non_font_locales_rejected() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("test.png");
 		create_test_png(&source);
@@ -959,6 +976,7 @@ mod tests {
 				locales: Some(vec!["western".into()]),
 				tags: None,
 			},
+			DEFAULT_MAX_BACKUPS,
 		);
 		assert!(result.is_err());
 		match result.unwrap_err() {
@@ -971,19 +989,19 @@ mod tests {
 	fn test_update_rejects_duplicate_key() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let source = dir.path().join("test.png");
 		create_test_png(&source);
 
 		// Import two different entries
 		let opts1 = ImportOptions::new(MediaType::Statusbar, "Alpha", &source);
-		let id1 = import_media(&addon_dir, opts1).unwrap().entry.id;
+		let id1 = import_media(&addon_dir, opts1, DEFAULT_MAX_BACKUPS).unwrap().entry.id;
 
 		let source2 = dir.path().join("test2.png");
 		create_test_png(&source2);
 		let opts2 = ImportOptions::new(MediaType::Statusbar, "Beta", &source2);
-		import_media(&addon_dir, opts2).unwrap();
+		import_media(&addon_dir, opts2, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// Try to rename Alpha → Beta (duplicate)
 		let result = update_media(
@@ -994,6 +1012,7 @@ mod tests {
 				locales: None,
 				tags: None,
 			},
+			DEFAULT_MAX_BACKUPS,
 		);
 
 		assert!(result.is_err());
@@ -1007,7 +1026,7 @@ mod tests {
 	fn test_update_nonexistent_id() {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let fake_id = uuid::Uuid::new_v4();
 		let result = update_media(
@@ -1018,6 +1037,7 @@ mod tests {
 				locales: None,
 				tags: None,
 			},
+			DEFAULT_MAX_BACKUPS,
 		);
 		assert!(result.is_err());
 	}
@@ -1036,6 +1056,7 @@ mod tests {
 				locales: None,
 				tags: None,
 			},
+			DEFAULT_MAX_BACKUPS,
 		);
 		assert!(result.is_err());
 		match result.unwrap_err() {
@@ -1061,23 +1082,31 @@ mod tests {
 		let addon_dir = dir.path().join("TestAddon");
 
 		// 1. Init
-		let data = ensure_addon_dir(&addon_dir).unwrap();
+		let data = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 		assert_eq!(data.entries.len(), 0);
 
 		// 2. Import
 		let source = dir.path().join("a.png");
 		create_test_png(&source);
-		let id = import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "A", &source))
-			.unwrap()
-			.entry
-			.id;
+		let id = import_media(
+			&addon_dir,
+			ImportOptions::new(MediaType::Statusbar, "A", &source),
+			DEFAULT_MAX_BACKUPS,
+		)
+		.unwrap()
+		.entry
+		.id;
 
 		let source2 = dir.path().join("b.png");
 		create_test_png(&source2);
-		let id2 = import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "B", &source2))
-			.unwrap()
-			.entry
-			.id;
+		let id2 = import_media(
+			&addon_dir,
+			ImportOptions::new(MediaType::Statusbar, "B", &source2),
+			DEFAULT_MAX_BACKUPS,
+		)
+		.unwrap()
+		.entry
+		.id;
 
 		// 3. Read back
 		let data = read_data(&addon_dir).unwrap();
@@ -1092,11 +1121,12 @@ mod tests {
 				locales: None,
 				tags: Some(vec!["renamed".into()]),
 			},
+			DEFAULT_MAX_BACKUPS,
 		)
 		.unwrap();
 
 		// 5. Remove one
-		let _ = remove_media(&addon_dir, &id).unwrap();
+		let _ = remove_media(&addon_dir, &id, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// 6. Verify final state
 		let data = read_data(&addon_dir).unwrap();
@@ -1111,7 +1141,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let addon_dir = dir.path().join("TestAddon");
 
-		ensure_addon_dir(&addon_dir).unwrap();
+		ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 		let initial_snapshot = read_data_lua_snapshot(&addon_dir);
 		assert!(initial_snapshot.contains(&format!("Tool: wow-sharedmedia v{}", env!("CARGO_PKG_VERSION"))));
 		assert!(initial_snapshot.contains(&format!("version = \"{}\"", env!("CARGO_PKG_VERSION"))));
@@ -1124,6 +1154,7 @@ mod tests {
 		let imported = import_media(
 			&addon_dir,
 			ImportOptions::new(MediaType::Statusbar, "Lifecycle", &source),
+			DEFAULT_MAX_BACKUPS,
 		)
 		.unwrap();
 		let after_import = read_data_lua_snapshot(&addon_dir);
@@ -1142,6 +1173,7 @@ mod tests {
 				locales: None,
 				tags: Some(vec!["golden".into(), "stateful".into()]),
 			},
+			DEFAULT_MAX_BACKUPS,
 		)
 		.unwrap();
 		let after_update = read_data_lua_snapshot(&addon_dir);
@@ -1150,7 +1182,7 @@ mod tests {
 		assert!(!after_update.contains("key = \"Lifecycle\""));
 		assert!(after_update.contains("tags = {"));
 
-		remove_media(&addon_dir, &imported.entry.id).unwrap();
+		remove_media(&addon_dir, &imported.entry.id, DEFAULT_MAX_BACKUPS).unwrap();
 		let after_remove = read_data_lua_snapshot(&addon_dir);
 		assert_eq!(initial_snapshot, after_remove);
 	}

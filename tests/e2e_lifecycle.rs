@@ -8,7 +8,8 @@
 
 use tempfile::TempDir;
 use wow_sharedmedia::{
-	ImportOptions, MediaType, UpdateOptions, ensure_addon_dir, import_media, read_data, remove_media, update_media,
+	DEFAULT_MAX_BACKUPS, ImportOptions, MediaType, UpdateOptions, ensure_addon_dir, import_media, read_data,
+	remove_media, update_media,
 };
 
 // ---------------------------------------------------------------------------
@@ -74,7 +75,7 @@ fn e2e_full_lifecycle_all_media_types() {
 	let addon_dir = tmp.path().join("!!!WindMedia");
 
 	// Phase 1: Initialize
-	let data = ensure_addon_dir(&addon_dir).unwrap();
+	let data = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 	assert_eq!(data.entries.len(), 0);
 	assert!(addon_dir.join("data.lua").exists());
 	assert!(addon_dir.join("loader.lua").exists());
@@ -85,14 +86,24 @@ fn e2e_full_lifecycle_all_media_types() {
 
 	// Phase 2: Import statusbar (real TGA fixture)
 	let tga = fixture_statusbar(tmp.path());
-	let sb = import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "Wind Tools", &tga)).unwrap();
+	let sb = import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Statusbar, "Wind Tools", &tga),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 	assert_eq!(sb.entry.key, "Wind Tools");
 	assert!(sb.entry.file.ends_with(".tga"));
 	assert!(addon_dir.join(&sb.entry.file).exists());
 
 	// Phase 3: Import background (real PNG fixture)
 	let png = fixture_background(tmp.path());
-	let bg = import_media(&addon_dir, ImportOptions::new(MediaType::Background, "Art BG", &png)).unwrap();
+	let bg = import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Background, "Art BG", &png),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 	assert_eq!(bg.entry.key, "Art BG");
 	assert!(bg.entry.file.ends_with(".tga"));
 	assert!(addon_dir.join(&bg.entry.file).exists());
@@ -100,7 +111,12 @@ fn e2e_full_lifecycle_all_media_types() {
 	// Phase 4: Import sound (WAV → OGG, programmatic)
 	let wav = tmp.path().join("click.wav");
 	create_test_wav(&wav, 44_100, 1, &[0, 8192, -8192, 0]);
-	let snd = import_media(&addon_dir, ImportOptions::new(MediaType::Sound, "Click", &wav)).unwrap();
+	let snd = import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Sound, "Click", &wav),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 	assert_eq!(snd.entry.key, "Click");
 	assert!(snd.entry.file.ends_with(".ogg"));
 	assert!(snd.entry.metadata.as_ref().unwrap().audio_duration_secs > Some(0.0));
@@ -108,7 +124,12 @@ fn e2e_full_lifecycle_all_media_types() {
 
 	// Phase 5: Import font (real TTF fixture)
 	let ttf = fixture_font(tmp.path());
-	let fnt = import_media(&addon_dir, ImportOptions::new(MediaType::Font, "Montserrat Bold", &ttf)).unwrap();
+	let fnt = import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Font, "Montserrat Bold", &ttf),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 	assert_eq!(fnt.entry.key, "Montserrat Bold");
 	assert!(fnt.entry.file.ends_with(".ttf"));
 	assert!(addon_dir.join(&fnt.entry.file).exists());
@@ -153,6 +174,7 @@ fn e2e_full_lifecycle_all_media_types() {
 			locales: None,
 			tags: Some(vec!["clean".into(), "updated".into()]),
 		},
+		DEFAULT_MAX_BACKUPS,
 	)
 	.unwrap();
 
@@ -166,11 +188,11 @@ fn e2e_full_lifecycle_all_media_types() {
 	assert_eq!(bar.tags, vec!["clean", "updated"]);
 
 	// Phase 10: Remove the sound entry
-	let _ = remove_media(&addon_dir, &snd.entry.id).unwrap();
+	let _ = remove_media(&addon_dir, &snd.entry.id, DEFAULT_MAX_BACKUPS).unwrap();
 	assert!(!addon_dir.join(&snd.entry.file).exists());
 
 	// Phase 11: Remove the background entry
-	let _ = remove_media(&addon_dir, &bg.entry.id).unwrap();
+	let _ = remove_media(&addon_dir, &bg.entry.id, DEFAULT_MAX_BACKUPS).unwrap();
 	assert!(!addon_dir.join(&bg.entry.file).exists());
 
 	// Phase 12: Verify final state
@@ -185,12 +207,21 @@ fn e2e_full_lifecycle_all_media_types() {
 fn e2e_import_duplicate_key_rejected() {
 	let tmp = TempDir::new().unwrap();
 	let addon_dir = tmp.path().join("!!!WindMedia");
-	ensure_addon_dir(&addon_dir).unwrap();
+	ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 	let tga = fixture_statusbar(tmp.path());
-	import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "Dupe", &tga)).unwrap();
+	import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Statusbar, "Dupe", &tga),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 
-	let result = import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "Dupe", &tga));
+	let result = import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Statusbar, "Dupe", &tga),
+		DEFAULT_MAX_BACKUPS,
+	);
 	assert!(result.is_err());
 }
 
@@ -198,9 +229,9 @@ fn e2e_import_duplicate_key_rejected() {
 fn e2e_remove_nonexistent_id_fails() {
 	let tmp = TempDir::new().unwrap();
 	let addon_dir = tmp.path().join("!!!WindMedia");
-	ensure_addon_dir(&addon_dir).unwrap();
+	ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
-	let result = remove_media(&addon_dir, &uuid::Uuid::new_v4());
+	let result = remove_media(&addon_dir, &uuid::Uuid::new_v4(), DEFAULT_MAX_BACKUPS);
 	assert!(result.is_err());
 }
 
@@ -208,10 +239,15 @@ fn e2e_remove_nonexistent_id_fails() {
 fn e2e_data_lua_roundtrip_preserves_chinese_keys() {
 	let tmp = TempDir::new().unwrap();
 	let addon_dir = tmp.path().join("!!!WindMedia");
-	ensure_addon_dir(&addon_dir).unwrap();
+	ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 	let tga = fixture_statusbar(tmp.path());
-	let imported = import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "清风明月", &tga)).unwrap();
+	let imported = import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Statusbar, "清风明月", &tga),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 
 	let data = read_data(&addon_dir).unwrap();
 	assert_eq!(data.entries[0].key, "清风明月");
@@ -222,10 +258,15 @@ fn e2e_data_lua_roundtrip_preserves_chinese_keys() {
 fn e2e_data_lua_is_valid_lua() {
 	let tmp = TempDir::new().unwrap();
 	let addon_dir = tmp.path().join("!!!WindMedia");
-	ensure_addon_dir(&addon_dir).unwrap();
+	ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 	let tga = fixture_statusbar(tmp.path());
-	import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "Bar", &tga)).unwrap();
+	import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Statusbar, "Bar", &tga),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 
 	let lua = mlua::Lua::new();
 	let content = std::fs::read_to_string(addon_dir.join("data.lua")).unwrap();
@@ -244,12 +285,17 @@ fn e2e_idempotent_ensure_addon_dir() {
 	let tmp = TempDir::new().unwrap();
 	let addon_dir = tmp.path().join("!!!WindMedia");
 
-	let data1 = ensure_addon_dir(&addon_dir).unwrap();
+	let data1 = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 
 	let tga = fixture_statusbar(tmp.path());
-	import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "Bar", &tga)).unwrap();
+	import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Statusbar, "Bar", &tga),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 
-	let data2 = ensure_addon_dir(&addon_dir).unwrap();
+	let data2 = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 	assert_eq!(data1.entries.len(), 0);
 	assert_eq!(data2.entries.len(), 1);
 }
@@ -260,7 +306,7 @@ fn e2e_plain_folder_name() {
 	let addon_dir = tmp.path().join("WindMedia");
 
 	// Phase 1: Initialize — TOC file name and title derive from folder name
-	let data = ensure_addon_dir(&addon_dir).unwrap();
+	let data = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 	assert_eq!(data.entries.len(), 0);
 	assert!(addon_dir.join("data.lua").exists());
 	assert!(addon_dir.join("loader.lua").exists());
@@ -277,7 +323,12 @@ fn e2e_plain_folder_name() {
 
 	// Phase 2: Import statusbar
 	let tga = fixture_statusbar(tmp.path());
-	let sb = import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "Plain Bar", &tga)).unwrap();
+	let sb = import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Statusbar, "Plain Bar", &tga),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 	assert_eq!(sb.entry.key, "Plain Bar");
 	assert!(addon_dir.join(&sb.entry.file).exists());
 
@@ -295,12 +346,13 @@ fn e2e_plain_folder_name() {
 			locales: None,
 			tags: Some(vec!["plain".into()]),
 		},
+		DEFAULT_MAX_BACKUPS,
 	)
 	.unwrap();
 	assert_eq!(updated.key, "Renamed Bar");
 
 	// Phase 5: Remove
-	let _ = remove_media(&addon_dir, &sb.entry.id).unwrap();
+	let _ = remove_media(&addon_dir, &sb.entry.id, DEFAULT_MAX_BACKUPS).unwrap();
 	assert!(!addon_dir.join(&sb.entry.file).exists());
 
 	// Phase 6: Verify final state
@@ -313,7 +365,7 @@ fn e2e_custom_addon_name() {
 	let tmp = TempDir::new().unwrap();
 	let addon_dir = tmp.path().join("!!MyCustomMedia");
 
-	let data = ensure_addon_dir(&addon_dir).unwrap();
+	let data = ensure_addon_dir(&addon_dir, DEFAULT_MAX_BACKUPS).unwrap();
 	assert_eq!(data.entries.len(), 0);
 	assert!(addon_dir.join("!!MyCustomMedia.toc").exists());
 
@@ -322,7 +374,12 @@ fn e2e_custom_addon_name() {
 	assert!(!toc.contains("WindMedia"));
 
 	let tga = fixture_statusbar(tmp.path());
-	let sb = import_media(&addon_dir, ImportOptions::new(MediaType::Statusbar, "Custom Bar", &tga)).unwrap();
+	let sb = import_media(
+		&addon_dir,
+		ImportOptions::new(MediaType::Statusbar, "Custom Bar", &tga),
+		DEFAULT_MAX_BACKUPS,
+	)
+	.unwrap();
 	assert_eq!(sb.entry.key, "Custom Bar");
 	assert!(addon_dir.join(&sb.entry.file).exists());
 

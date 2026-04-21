@@ -112,17 +112,20 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, Error> {
 /// Write AddonData to data.lua (with BAK backup).
 ///
 /// Before writing, creates a numbered backup: data.lua.1.bak, data.lua.2.bak, ...
-pub(crate) fn write_data(addon_dir: &Path, data: &AddonData) -> Result<(), Error> {
+/// When `max_backups` is zero, backup creation is skipped entirely.
+/// After creating a backup, old backups beyond `max_backups` are pruned (oldest first).
+pub(crate) fn write_data(addon_dir: &Path, data: &AddonData, max_backups: u32) -> Result<(), Error> {
 	let data_path = addon_dir.join("data.lua");
 
-	// Create numbered backup before overwriting
-	if data_path.exists() {
+	// Create numbered backup before overwriting (skip when max_backups == 0)
+	if max_backups > 0 && data_path.exists() {
 		let bak_num = next_bak_number(addon_dir);
 		let bak_path = addon_dir.join(format!("data.lua.{bak_num}.bak"));
 		std::fs::copy(&data_path, &bak_path).map_err(|e| Error::Io {
 			source: e,
 			path: bak_path,
 		})?;
+		prune_backups(addon_dir, max_backups);
 	}
 
 	// Generate the Lua content
@@ -168,6 +171,36 @@ fn next_bak_number(addon_dir: &Path) -> u32 {
 		}
 	}
 	max + 1
+}
+
+fn prune_backups(addon_dir: &Path, max_backups: u32) {
+	let mut bak_numbers: Vec<u32> = Vec::new();
+	for entry in std::fs::read_dir(addon_dir).into_iter().flatten() {
+		let entry = match entry {
+			Ok(e) => e,
+			Err(_) => continue,
+		};
+		let os_name = entry.file_name();
+		let name: &str = match os_name.to_str() {
+			Some(s) => s,
+			None => continue,
+		};
+		if let Some(rest) = name.strip_prefix("data.lua.")
+			&& let Some(rest) = rest.strip_suffix(".bak")
+			&& let Ok(n) = rest.parse::<u32>()
+		{
+			bak_numbers.push(n);
+		}
+	}
+	if bak_numbers.len() <= max_backups as usize {
+		return;
+	}
+	bak_numbers.sort();
+	let to_remove = bak_numbers.len() - max_backups as usize;
+	for &n in &bak_numbers[..to_remove] {
+		let path = addon_dir.join(format!("data.lua.{n}.bak"));
+		let _ = std::fs::remove_file(path);
+	}
 }
 
 fn serialize_addon_data(data: &AddonData) -> Result<String, Error> {
@@ -279,6 +312,8 @@ mod tests {
 	use chrono::Utc;
 	use tempfile::TempDir;
 
+	const DEFAULT_MAX_BACKUPS: u32 = 10;
+
 	fn sample_data() -> AddonData {
 		let mut data = AddonData::empty("0.1.0");
 		data.entries.push(MediaEntry {
@@ -300,7 +335,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let data = sample_data();
 
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 		let read_back = read_data(dir.path()).unwrap();
 
 		assert_eq!(read_back.schema_version, data.schema_version);
@@ -316,9 +351,9 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let data = sample_data();
 
-		write_data(dir.path(), &data).unwrap(); // no BAK (first write)
-		write_data(dir.path(), &data).unwrap(); // creates .1.bak
-		write_data(dir.path(), &data).unwrap(); // creates .2.bak
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap(); // no BAK (first write)
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap(); // creates .1.bak
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap(); // creates .2.bak
 
 		assert!(dir.path().join("data.lua.1.bak").exists());
 		assert!(dir.path().join("data.lua.2.bak").exists());
@@ -330,7 +365,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let data = AddonData::empty("1.0.0");
 
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 		let read_back = read_data(dir.path()).unwrap();
 
 		assert!(read_back.entries.is_empty());
@@ -384,7 +419,7 @@ mod tests {
 			tags: vec![],
 		});
 
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 		let read_back = read_data(dir.path()).unwrap();
 
 		assert_eq!(read_back.entries.len(), 3);
@@ -422,7 +457,7 @@ mod tests {
 			tags: vec![],
 		});
 
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 		let read_back = read_data(dir.path()).unwrap();
 		assert_eq!(read_back.entries[0].key, r#"Test "Quote""#);
 	}
@@ -443,7 +478,7 @@ mod tests {
 			tags: vec![],
 		});
 
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 		let read_back = read_data(dir.path()).unwrap();
 		assert_eq!(read_back.entries[0].key, "清风明月");
 	}
@@ -452,7 +487,7 @@ mod tests {
 	fn test_generated_lua_is_valid() {
 		let dir = TempDir::new().unwrap();
 		let data = sample_data();
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 
 		let content = std::fs::read_to_string(dir.path().join("data.lua")).unwrap();
 
@@ -518,12 +553,12 @@ mod tests {
 			tags: vec![],
 		});
 
-		write_data(dir.path(), &data1).unwrap();
+		write_data(dir.path(), &data1, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// Modify and write again
 		let mut data2 = data1.clone();
 		data2.entries[0].key = "Modified".into();
-		write_data(dir.path(), &data2).unwrap();
+		write_data(dir.path(), &data2, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// BAK should contain the original
 		let bak_content = std::fs::read_to_string(dir.path().join("data.lua.1.bak")).unwrap();
@@ -541,11 +576,11 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let data = sample_data();
 
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 		let original_content = std::fs::read_to_string(dir.path().join("data.lua")).unwrap();
 
 		// Second write creates BAK
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 		let bak_content = std::fs::read_to_string(dir.path().join("data.lua.1.bak")).unwrap();
 		assert_eq!(bak_content, original_content);
 	}
@@ -555,7 +590,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let data = sample_data();
 
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 
 		// tmp file should be cleaned up
 		assert!(!dir.path().join("data.lua.tmp").exists());
@@ -578,7 +613,7 @@ mod tests {
 			tags: vec![],
 		});
 
-		write_data(dir.path(), &data).unwrap();
+		write_data(dir.path(), &data, DEFAULT_MAX_BACKUPS).unwrap();
 		let content = std::fs::read_to_string(dir.path().join("data.lua")).unwrap();
 
 		assert!(content.contains("Generated: "));
@@ -591,5 +626,77 @@ mod tests {
 		let read_back = read_data(dir.path()).unwrap();
 		assert_eq!(read_back.version, "9.9.9-test");
 		assert_eq!(read_back.entries[0].key, "Version Probe");
+	}
+
+	#[test]
+	fn test_prune_removes_oldest_backups() {
+		let dir = TempDir::new().unwrap();
+		let data = sample_data();
+
+		for _ in 0..5 {
+			write_data(dir.path(), &data, 3).unwrap();
+		}
+
+		let bak_files: Vec<u32> = std::fs::read_dir(dir.path())
+			.unwrap()
+			.flatten()
+			.filter_map(|e| {
+				let name = e.file_name().to_str()?.to_string();
+				name.strip_prefix("data.lua.")?.strip_suffix(".bak")?.parse().ok()
+			})
+			.collect();
+
+		assert_eq!(bak_files.len(), 3);
+		assert!(!bak_files.contains(&1), "should remove oldest bak 1");
+		assert!(bak_files.contains(&2), "should keep bak 2");
+		assert!(bak_files.contains(&3), "should keep bak 3");
+		assert!(bak_files.contains(&4), "should keep bak 4");
+	}
+
+	#[test]
+	fn test_max_backups_zero_skips_backup() {
+		let dir = TempDir::new().unwrap();
+		let data = sample_data();
+
+		write_data(dir.path(), &data, 0).unwrap();
+		write_data(dir.path(), &data, 0).unwrap();
+
+		let bak_files: Vec<String> = std::fs::read_dir(dir.path())
+			.unwrap()
+			.flatten()
+			.filter_map(|e| {
+				let name = e.file_name().to_str()?.to_string();
+				if name.starts_with("data.lua.") && name.ends_with(".bak") {
+					Some(name)
+				} else {
+					None
+				}
+			})
+			.collect();
+
+		assert!(bak_files.is_empty(), "no .bak files should exist when max_backups=0");
+	}
+
+	#[test]
+	fn test_prune_keeps_newest() {
+		let dir = TempDir::new().unwrap();
+		let data = sample_data();
+
+		for _ in 0..10 {
+			write_data(dir.path(), &data, 5).unwrap();
+		}
+
+		let mut bak_numbers: Vec<u32> = std::fs::read_dir(dir.path())
+			.unwrap()
+			.flatten()
+			.filter_map(|e| {
+				let name = e.file_name().to_str()?.to_string();
+				name.strip_prefix("data.lua.")?.strip_suffix(".bak")?.parse().ok()
+			})
+			.collect();
+		bak_numbers.sort();
+
+		assert_eq!(bak_numbers.len(), 5);
+		assert_eq!(bak_numbers, vec![5, 6, 7, 8, 9]);
 	}
 }
