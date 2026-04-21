@@ -75,7 +75,7 @@ jobs:
             exit 0
           elif [ "$bump" = "major" ] || [ "$bump" = "minor" ] || [ "$bump" = "patch" ]; then
             # Bump via cargo set-version
-            cargo set-version --"$bump"
+            cargo set-version --bump "$bump"
             version="$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "([^"]+)"/\1/')"
             echo "first_release=false" >> "$GITHUB_OUTPUT"
           else
@@ -141,6 +141,9 @@ jobs:
           else
             cog changelog --at "$version" > CHANGELOG.md
           fi
+
+      - name: "🎨 Format changelog"
+        run: npx oxfmt CHANGELOG.md
 
       - name: "🧾 Include changelog in release commit"
         shell: bash
