@@ -1,8 +1,8 @@
 {
 	"private": true,
 	"scripts": {
-		"update-vendor": "bun update-vendor.ts",
-		"refresh-vendor": "bun update-vendor.ts --refresh",
+		"update-vendor": "bun run update-vendor.ts",
+		"refresh-vendor": "bun run update-vendor.ts --refresh",
 		"lint": "oxlint .",
 		"lint:fix": "oxlint --fix .",
 		"format:check": "oxfmt --check .",
