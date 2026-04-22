@@ -66,9 +66,6 @@ mise run fmt
 mise run lint
 mise run test
 mise run docs
-mise run stylua
-mise run ts:lint
-mise run ts:fmt
 ```
 
 ## 🪝 Pre-commit Hooks

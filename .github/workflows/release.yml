@@ -73,17 +73,11 @@ jobs:
           name: vendor
           path: vendor
       - name: "🎨 Check formatting"
-        run: cargo fmt --all --check
-      - name: "📦 Install StyLua"
-        uses: JohnnyMorganz/stylua-action@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: latest
-          args: false
+        run: mise run rust:fmt
       - name: "✅ Check Lua formatting"
-        run: stylua --check templates/*.lua
+        run: mise run lua:fmt
       - name: "🧹 Clippy"
-        run: cargo clippy -p wow-sharedmedia --all-targets -- -D warnings
+        run: mise run rust:lint
       - name: "🧪 Tests"
         run: cargo test -p wow-sharedmedia
       - name: "📖 Docs"

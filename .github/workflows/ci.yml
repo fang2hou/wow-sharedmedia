@@ -13,7 +13,7 @@ env:
 
 jobs:
   fmt:
-    name: "🎨 Rust Format"
+    name: "🎨 Format (Rust)"
     runs-on: ubuntu-latest
     steps:
       - name: "📥 Checkout"
@@ -25,27 +25,25 @@ jobs:
         with:
           cache: true
       - name: "✅ Check formatting"
-        run: cargo fmt --all --check
+        run: mise run rust:fmt
 
   stylua:
-    name: "🌙 Lua Format"
+    name: "🌙 Format (Lua)"
     runs-on: ubuntu-latest
     steps:
       - name: "📥 Checkout"
         uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: "📦 Install StyLua"
-        uses: JohnnyMorganz/stylua-action@v4
+      - name: "🔧 Setup tools"
+        uses: jdx/mise-action@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: latest
-          args: false
+          cache: true
       - name: "✅ Check Lua formatting"
-        run: stylua --check templates/*.lua
+        run: mise run lua:fmt
 
   oxc:
-    name: "🔎 OXC (lint + format)"
+    name: "🔎 Lint + Format (TypeScript)"
     runs-on: ubuntu-latest
     steps:
       - name: "📥 Checkout"
@@ -109,7 +107,7 @@ jobs:
           name: vendor
           path: vendor
       - name: "✅ Lint crate"
-        run: cargo clippy -p wow-sharedmedia --all-targets -- -D warnings
+        run: mise run rust:lint
 
   test:
     name: "🧪 Tests (${{ matrix.os }})"
