@@ -32,6 +32,9 @@ jobs:
         with:
           cache: false
 
+      - name: "📦 Install dependencies"
+        run: cd scripts && bun install --frozen-lockfile
+
       - name: "💾 Cache Rust artifacts"
         uses: Swatinem/rust-cache@v2
 
@@ -150,7 +153,8 @@ jobs:
           mv /tmp/new_changelog.md CHANGELOG.md
 
       - name: "🎨 Format changelog"
-        run: cd scripts && bun x oxfmt ../CHANGELOG.md
+        working-directory: scripts
+        run: bun x oxfmt "$GITHUB_WORKSPACE/CHANGELOG.md"
 
       - name: "🧾 Include changelog in release commit"
         shell: bash
