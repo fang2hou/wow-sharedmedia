@@ -89,3 +89,8 @@ run = "bun run refresh-vendor"
 [tasks.ci]
 description = "Full CI pipeline"
 depends = ["fmt", "lint", "test"]
+
+[tasks."version:check"]
+description = "Check if vendor Interface version matches latest from Wago API"
+dir = "scripts"
+run = "bun run version-check"

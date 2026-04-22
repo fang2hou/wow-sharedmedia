@@ -3,6 +3,7 @@
 	"scripts": {
 		"update-vendor": "bun run update-vendor.ts",
 		"refresh-vendor": "bun run update-vendor.ts --refresh",
+		"version-check": "bun run version-check.ts",
 		"lint": "oxlint .",
 		"lint:fix": "oxlint --fix .",
 		"format:check": "oxfmt --check .",
