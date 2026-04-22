@@ -1,3 +1,32 @@
+## 0.3.1 - 2026-04-22
+
+#### ✨ Features
+
+- auto-detect WoW Interface version from vendor TOC - (bb1e2a2) - Zhou Fang
+- add configurable max_backups with pruning (#19) - (1437e75) - Zhou Fang
+
+#### 🐛 Bug Fixes
+
+- (**changelog**) scope entries to correct versions - (d47ad0f) - Zhou Fang
+- (**changelog**) restore version history and preserve on future releases (#17) - (183f497) - Zhou Fang
+- (**ci**) remove unsupported --from flag from cog changelog (#28) - (dccabdd) - Zhou Fang
+- (**ci**) use absolute path for oxfmt in release-prepare - (32bd289) - Zhou Fang
+- (**ci**) auto-format CHANGELOG and correct set-version flag (#14) - (7f17921) - Zhou Fang
+- update SharedMedia link, bump MSRV to 1.95, sync version in docs (#22) - (6bee068) - Zhou Fang
+
+#### 📝 Documentation
+
+- use generic addon names in examples (#21) - (3952025) - Zhou Fang
+- add emoji to changelog section headers (#18) - (16b7fb0) - Zhou Fang
+
+#### 📦 Build
+
+- migrate to mise for unified toolchain management - (9caf4b2) - Zhou Fang
+
+#### ♻️ Refactoring
+
+- decouple library from WindMedia-specific naming (#15) - (c02e3cf) - Zhou Fang
+
 ## 0.3.0 - 2026-04-22
 
 #### 🐛 Bug Fixes
